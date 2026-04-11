@@ -13,11 +13,13 @@ import {
   CheckCircle2, 
   Clock, 
   Trophy,
-  Users
+  Users,
+  RotateCcw
 } from 'lucide-react'
-import { getPolls, votePoll, closePoll, getMembers } from '@/lib/storage'
-import { format, parseISO } from 'date-fns'
+import { getPolls, votePoll, closePoll, getMembers, resetPoll, pullSharedData } from '@/lib/storage'
 import type { Poll, Member } from '@/lib/types'
+import { useAuth } from '@/components/auth/auth-provider'
+import { format, parseISO } from 'date-fns'
 import { CreatePollDialog } from '@/components/polls/create-poll-dialog'
 import { 
   Bar, 
@@ -29,15 +31,21 @@ import {
 } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 
-const VOTER_ID = 'current-voter' // In a real app, this would be the logged-in user's ID
-
 export default function PollsPage() {
+  const { role, userId } = useAuth()
   const [polls, setPolls] = useState<Poll[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [votedPolls, setVotedPolls] = useState<Set<string>>(new Set())
+  const [selections, setSelections] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
+    // Pull cloud data first, then load
+    pullSharedData().then(() => {
+      setPolls(getPolls())
+      setMembers(getMembers())
+    })
+    // Also load local immediately
     setPolls(getPolls())
     setMembers(getMembers())
     
@@ -51,8 +59,23 @@ export default function PollsPage() {
   const activePolls = polls.filter(p => p.isActive)
   const closedPolls = polls.filter(p => !p.isActive)
 
-  const handleVote = (pollId: string, optionId: string) => {
-    votePoll(pollId, optionId, VOTER_ID)
+  const toggleSelection = (pollId: string, optionId: string, allowMultiple: boolean) => {
+    setSelections(prev => {
+      const current = prev[pollId] || []
+      if (allowMultiple) {
+        if (current.includes(optionId)) return { ...prev, [pollId]: current.filter(id => id !== optionId) }
+        return { ...prev, [pollId]: [...current, optionId] }
+      }
+      return { ...prev, [pollId]: [optionId] }
+    })
+  }
+
+  const submitVote = (pollId: string) => {
+    const chosen = selections[pollId] || []
+    if (chosen.length === 0) return
+    
+    const finalVoterId = userId || 'unknown-voter'
+    votePoll(pollId, chosen, finalVoterId)
     setPolls(getPolls())
     
     const newVotedPolls = new Set(votedPolls)
@@ -64,6 +87,17 @@ export default function PollsPage() {
   const handleClosePoll = (pollId: string) => {
     closePoll(pollId)
     setPolls(getPolls())
+  }
+
+  const handleResetPoll = (pollId: string) => {
+    if (!confirm('Are you sure you want to completely erase all votes for this poll?')) return
+    resetPoll(pollId)
+    setPolls(getPolls())
+    
+    const newVotedPolls = new Set(votedPolls)
+    newVotedPolls.delete(pollId)
+    setVotedPolls(newVotedPolls)
+    sessionStorage.setItem('voted-polls', JSON.stringify([...newVotedPolls]))
   }
 
   const refreshPolls = () => {
@@ -99,10 +133,12 @@ export default function PollsPage() {
           <h1 className="text-2xl font-bold">Polls</h1>
           <p className="text-muted-foreground">Vote on team decisions together</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Poll
-        </Button>
+        {role === 'admin' && (
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Poll
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="active">
@@ -162,36 +198,91 @@ export default function PollsPage() {
                               </BarChart>
                             </ResponsiveContainer>
                           </ChartContainer>
-                          <div className="flex items-center justify-between text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
+                          <div className="mt-4 border-t pt-4">
+                            <p className="text-sm font-semibold mb-2 flex items-center gap-2">
                               <Users className="h-4 w-4" />
-                              {totalVotes} vote{totalVotes !== 1 ? 's' : ''}
-                            </span>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleClosePoll(poll.id)}
-                            >
-                              Close Poll
-                            </Button>
+                              Voter Breakdown ({totalVotes} total votes)
+                            </p>
+                            <div className="space-y-3 mt-3">
+                              {poll.options.filter(o => o.votes.length > 0).map(opt => (
+                                <div key={opt.id} className="text-sm p-3 rounded-lg bg-muted/50">
+                                  <div className="font-semibold text-primary mb-1 flex justify-between">
+                                    <span>{opt.text}</span>
+                                    <Badge variant="secondary" className="text-xs">{opt.votes.length}</Badge>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1 text-muted-foreground mt-2">
+                                    {opt.votes.map(vId => (
+                                      <span key={vId} className="bg-background border px-2 py-0.5 rounded text-xs">
+                                        {getMemberName(vId)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-end mt-4">
+                            {role === 'admin' && (
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="text-destructive/80 hover:text-destructive"
+                                  onClick={() => handleResetPoll(poll.id)}
+                                >
+                                  <RotateCcw className="h-4 w-4 mr-1" />
+                                  Reset
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleClosePoll(poll.id)}
+                                >
+                                  Close Poll
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : (
                         // Show voting options
-                        <div className="space-y-2">
-                          {poll.options.map(option => (
-                            <Button
-                              key={option.id}
-                              variant="outline"
-                              className="w-full justify-start h-auto py-3 px-4"
-                              onClick={() => handleVote(poll.id, option.id)}
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            {poll.options.map(option => {
+                              const isSelected = (selections[poll.id] || []).includes(option.id)
+                              return (
+                                <Button
+                                  key={option.id}
+                                  variant={isSelected ? "default" : "outline"}
+                                  className="w-full justify-start h-auto py-3 px-4 transition-all"
+                                  onClick={() => toggleSelection(poll.id, option.id, poll.allowMultipleVotes || false)}
+                                >
+                                  <div className="flex gap-2 items-center">
+                                    <div className={`w-4 h-4 rounded-sm border ${isSelected ? 'bg-primary border-primary' : 'bg-transparent border-muted-foreground'} flex items-center justify-center shrink-0`}>
+                                      {isSelected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                                    </div>
+                                    {option.text}
+                                  </div>
+                                </Button>
+                              )
+                            })}
+                          </div>
+                          
+                          <div className="flex flex-col gap-2">
+                            <Button 
+                              className="w-full"
+                              onClick={() => submitVote(poll.id)}
+                              disabled={(selections[poll.id] || []).length === 0}
                             >
-                              {option.text}
+                              Submit Vote
                             </Button>
-                          ))}
-                          <p className="text-xs text-muted-foreground text-center mt-2">
-                            Click an option to vote
-                          </p>
+                            {poll.allowMultipleVotes && (
+                              <p className="text-xs text-muted-foreground text-center">
+                                * You can select multiple options
+                              </p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </CardContent>
@@ -260,9 +351,29 @@ export default function PollsPage() {
                         </ResponsiveContainer>
                       </ChartContainer>
 
-                      <p className="text-sm text-muted-foreground text-center">
-                        {totalVotes} total vote{totalVotes !== 1 ? 's' : ''}
-                      </p>
+                      <div className="mt-4 border-t pt-4">
+                        <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Complete Voter Breakdown ({totalVotes} total votes)
+                        </p>
+                        <div className="space-y-3 mt-3">
+                          {poll.options.filter(o => o.votes.length > 0).map(opt => (
+                            <div key={opt.id} className="text-sm p-3 rounded-lg bg-muted/50">
+                              <div className="font-semibold text-primary mb-1 flex justify-between">
+                                <span>{opt.text}</span>
+                                <Badge variant="secondary" className="text-xs">{opt.votes.length}</Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-1 text-muted-foreground mt-2">
+                                {opt.votes.map(vId => (
+                                  <span key={vId} className="bg-background border px-2 py-0.5 rounded text-xs">
+                                    {getMemberName(vId)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 )

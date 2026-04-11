@@ -14,11 +14,11 @@ import {
   MessageSquare,
   ArrowRight,
   MapPin,
-  Clock,
   Users,
-  Heart
+  Heart,
+  PartyPopper
 } from 'lucide-react'
-import { getSettings, getUpcomingTrips, getPastTrips, getActivePolls, getMembers, getPosts } from '@/lib/storage'
+import { getSettings, getUpcomingTrips, getPastTrips, getActivePolls, getMembers, getPosts, syncUsersFromSupabase, pullSharedData } from '@/lib/storage'
 import { differenceInDays, parseISO, format } from 'date-fns'
 import type { Trip, Poll, Member, WallPost } from '@/lib/types'
 
@@ -27,14 +27,27 @@ function getUpcomingBirthdays(members: Member[], days: number = 7) {
   const upcoming: Array<{ member: Member; daysUntil: number }> = []
 
   members.forEach(member => {
-    const birthday = parseISO(member.birthday)
-    const thisYearBirthday = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate())
-    
-    if (thisYearBirthday < today) {
-      thisYearBirthday.setFullYear(today.getFullYear() + 1)
+    if (member.status !== 'approved') return
+
+    let bdayDate: Date;
+    // Check if birthday corresponds to old YYYY-MM-DD or new DD-MM format
+    if (member.birthday.includes('-') && member.birthday.split('-').length === 3) {
+      const parsed = parseISO(member.birthday)
+      bdayDate = new Date(today.getFullYear(), parsed.getMonth(), parsed.getDate())
+    } else {
+      const [dd, mm] = member.birthday.split('-')
+      bdayDate = new Date(today.getFullYear(), parseInt(mm) - 1, parseInt(dd))
     }
     
-    const daysUntil = differenceInDays(thisYearBirthday, today)
+    if (bdayDate < today) {
+      bdayDate.setFullYear(today.getFullYear() + 1)
+    }
+    
+    // Normalize time to compare only days
+    today.setHours(0,0,0,0)
+    bdayDate.setHours(0,0,0,0)
+    const daysUntil = differenceInDays(bdayDate, today)
+    
     if (daysUntil >= 0 && daysUntil <= days) {
       upcoming.push({ member, daysUntil })
     }
@@ -53,40 +66,51 @@ export default function HomePage() {
   const [members, setMembers] = useState<Member[]>([])
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 
-  useEffect(() => {
+  const loadAllData = () => {
     setGroupName(getSettings().groupName)
     const upcoming = getUpcomingTrips()
     const past = getPastTrips()
     const polls = getActivePolls()
-    const allMembers = getMembers()
     const posts = getPosts()
 
     if (upcoming.length > 0) {
-      setUpcomingTrip(upcoming.sort((a, b) => 
-        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-      )[0])
+      setUpcomingTrip(upcoming.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())[0])
     }
-
     if (past.length > 0) {
-      setLatestTrip(past.sort((a, b) => 
-        new Date(b.endDate).getTime() - new Date(a.endDate).getTime()
-      )[0])
+      setLatestTrip(past.sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0])
     }
 
     setActivePolls(polls.slice(0, 2))
-    setUpcomingBirthdays(getUpcomingBirthdays(allMembers))
     setRecentPosts(posts.slice(0, 3))
+    
+    const allMembers = getMembers()
     setMembers(allMembers)
+    setUpcomingBirthdays(getUpcomingBirthdays(allMembers))
+  }
+
+  useEffect(() => {
+    // Step 1: Load from local instantly
+    loadAllData()
+    
+    // Step 2: Pull shared data from cloud (Supabase), then reload
+    pullSharedData().then(() => {
+      loadAllData()
+    })
+
+    // Step 3: Sync members from Supabase
+    syncUsersFromSupabase().then(() => {
+      const allMembers = getMembers()
+      setMembers(allMembers)
+      setUpcomingBirthdays(getUpcomingBirthdays(allMembers))
+    })
   }, [])
 
   useEffect(() => {
     if (!upcomingTrip) return
-
     const updateCountdown = () => {
       const tripDate = new Date(upcomingTrip.startDate)
       const now = new Date()
       const diff = tripDate.getTime() - now.getTime()
-
       if (diff > 0) {
         setCountdown({
           days: Math.floor(diff / (1000 * 60 * 60 * 24)),
@@ -96,17 +120,39 @@ export default function HomePage() {
         })
       }
     }
-
     updateCountdown()
     const interval = setInterval(updateCountdown, 1000)
     return () => clearInterval(interval)
   }, [upcomingTrip])
 
-  const getMemberName = (id: string) => members.find(m => m.id === id)?.name || 'Unknown'
+  const getMemberName = (id: string) => {
+    if (id === 'admin') return 'Administrator'
+    return members.find(m => m.id === id)?.name || 'Unknown'
+  }
+
+  // Calculations for Today's Highlights
+  const todayStrOldFormat = format(new Date(), 'MM-dd')
+  const todayStrNewFormat = format(new Date(), 'dd-MM')
+
+  const approvedMembers = members.filter(m => m.status === 'approved' || !m.status)
+  
+  const todaysBirthdays = approvedMembers.filter(m => {
+    if (m.birthday.includes('-') && m.birthday.split('-').length === 3) {
+      return m.birthday.substring(5) === todayStrOldFormat
+    }
+    return m.birthday === todayStrNewFormat
+  })
+
+  const todaysAnniversaries = approvedMembers.filter(m => {
+    if (!m.anniversary) return false
+    if (m.anniversary.includes('-') && m.anniversary.split('-').length === 3) {
+      return m.anniversary.substring(5) === todayStrOldFormat
+    }
+    return m.anniversary === todayStrNewFormat
+  })
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold text-foreground text-balance">
           Welcome to {groupName}
@@ -115,6 +161,55 @@ export default function HomePage() {
           Your private space for trips, memories, and celebrations
         </p>
       </div>
+
+      {/* SPECIAL EVENT HIGHLIGHTS */}
+      {(todaysBirthdays.length > 0 || todaysAnniversaries.length > 0) && (
+        <div className="grid gap-4 sm:grid-cols-2 mb-6">
+          {todaysBirthdays.map(m => (
+            <Card key={`bday-${m.id}`} className="bg-gradient-to-r from-accent/20 to-accent/5 border-accent/20 shadow-lg overflow-hidden relative">
+              <div className="absolute right-0 top-0 h-full w-32 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/confetti.png')] mix-blend-overlay"></div>
+              <CardContent className="p-6 flex items-center gap-4">
+                {m.avatar ? (
+                  <img src={m.avatar} alt={m.name} className="h-16 w-16 rounded-full border-2 border-accent object-cover flex-shrink-0" crossOrigin="anonymous" />
+                ) : (
+                  <div className="h-16 w-16 rounded-full border-2 border-accent bg-background flex items-center justify-center">
+                    <Cake className="h-8 w-8 text-accent" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-2xl font-bold flex items-center gap-2 text-accent">
+                    Happy Birthday! <PartyPopper className="h-5 w-5" />
+                  </h3>
+                  <p className="font-semibold text-lg">{m.name}</p>
+                  <p className="text-sm text-muted-foreground">Wish {m.name} a wonderful day!</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          
+          {todaysAnniversaries.map(m => (
+            <Card key={`annv-${m.id}`} className="bg-gradient-to-r from-pink-500/20 to-pink-500/5 border-pink-500/20 shadow-lg overflow-hidden relative">
+              <div className="absolute right-0 top-0 h-full w-32 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/confetti.png')] mix-blend-overlay"></div>
+              <CardContent className="p-6 flex items-center gap-4">
+                {m.avatar ? (
+                  <img src={m.avatar} alt={m.name} className="h-16 w-16 rounded-full border-2 border-pink-500 object-cover flex-shrink-0" crossOrigin="anonymous" />
+                ) : (
+                  <div className="h-16 w-16 rounded-full border-2 border-pink-500 bg-background flex items-center justify-center">
+                    <Heart className="h-8 w-8 text-pink-500" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-2xl font-bold flex items-center gap-2 text-pink-600">
+                    Happy Anniversary!
+                  </h3>
+                  <p className="font-semibold text-lg">{m.name}</p>
+                  <p className="text-sm text-muted-foreground">Sending love and best wishes!</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Upcoming Trip Countdown */}
       {upcomingTrip && (
@@ -191,7 +286,6 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </Link>
-
         <Link href="/polls">
           <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
             <CardContent className="p-4 flex items-center gap-4">
@@ -205,7 +299,6 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </Link>
-
         <Link href="/birthdays">
           <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
             <CardContent className="p-4 flex items-center gap-4">
@@ -219,7 +312,6 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </Link>
-
         <Link href="/members">
           <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
             <CardContent className="p-4 flex items-center gap-4">
@@ -227,7 +319,7 @@ export default function HomePage() {
                 <Users className="h-5 w-5 text-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{members.length}</p>
+                <p className="text-2xl font-bold">{approvedMembers.length}</p>
                 <p className="text-sm text-muted-foreground">Members</p>
               </div>
             </CardContent>
@@ -236,7 +328,38 @@ export default function HomePage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Latest Trip Memory */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-secondary" />
+              Recent Posts
+            </CardTitle>
+            <CardDescription>What the team is talking about</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentPosts.map(post => (
+                <div key={post.id} className="flex gap-3 p-3 rounded-lg bg-muted/50">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium">{getMemberName(post.authorId)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {format(parseISO(post.createdAt), 'MMM d')}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2">{post.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button variant="ghost" className="w-full mt-3" asChild>
+              <Link href="/wall">
+                Go to Group Wall <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+        
         {latestTrip && (
           <Card>
             <CardHeader className="pb-3">
@@ -244,7 +367,6 @@ export default function HomePage() {
                 <Image className="h-5 w-5 text-primary" />
                 Latest Memory
               </CardTitle>
-              <CardDescription>From {latestTrip.title}</CardDescription>
             </CardHeader>
             <CardContent>
               <Link href={`/trips/${latestTrip.id}`} className="block group">
@@ -256,105 +378,15 @@ export default function HomePage() {
                     crossOrigin="anonymous"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <p className="text-white font-medium">{latestTrip.title}</p>
-                    <p className="text-white/80 text-sm">{latestTrip.location}</p>
+                  <div className="absolute bottom-3 left-3 right-3 text-white">
+                    <p className="font-medium text-lg">{latestTrip.title}</p>
                   </div>
                 </div>
-                {latestTrip.bestMoment && (
-                  <p className="text-sm text-muted-foreground italic">
-                    &ldquo;{latestTrip.bestMoment}&rdquo;
-                  </p>
-                )}
               </Link>
             </CardContent>
           </Card>
         )}
-
-        {/* Upcoming Birthdays */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2">
-              <Cake className="h-5 w-5 text-accent" />
-              Upcoming Birthdays
-            </CardTitle>
-            <CardDescription>Coming up this week</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {upcomingBirthdays.length > 0 ? (
-              <div className="space-y-3">
-                {upcomingBirthdays.slice(0, 4).map(({ member, daysUntil }) => (
-                  <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center text-accent font-medium">
-                        {member.name.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <div>
-                        <p className="font-medium">{member.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(parseISO(member.birthday), 'MMMM d')}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant={daysUntil === 0 ? "default" : "secondary"} className={daysUntil === 0 ? "bg-accent text-accent-foreground" : ""}>
-                      {daysUntil === 0 ? 'Today!' : `${daysUntil} day${daysUntil > 1 ? 's' : ''}`}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-6">
-                No birthdays this week
-              </p>
-            )}
-            <Button variant="ghost" className="w-full mt-3" asChild>
-              <Link href="/birthdays">
-                View All Birthdays <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
       </div>
-
-      {/* Recent Wall Posts */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-secondary" />
-            Recent Posts
-          </CardTitle>
-          <CardDescription>What the team is talking about</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recentPosts.map(post => (
-              <div key={post.id} className="flex gap-3 p-3 rounded-lg bg-muted/50">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium flex-shrink-0">
-                  {getMemberName(post.authorId).split(' ').map(n => n[0]).join('')}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">{getMemberName(post.authorId)}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {format(parseISO(post.createdAt), 'MMM d')}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{post.content}</p>
-                  <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                    <Heart className="h-3 w-3" />
-                    {post.likes.length} likes
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <Button variant="ghost" className="w-full mt-3" asChild>
-            <Link href="/wall">
-              Go to Group Wall <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   )
 }

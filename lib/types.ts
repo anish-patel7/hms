@@ -1,12 +1,27 @@
+export interface DBUser {
+  id: string
+  name: string
+  dob: string
+  area: string
+  marriage_date?: string | null
+  profile_photo?: string | null
+  password?: string
+  pin?: string
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
 export interface Member {
   id: string
   name: string
   avatar?: string
   birthday: string
   anniversary?: string
+  area?: string
   bio?: string
   favoriteMemory?: string
   joinDate: string
+  status?: 'pending' | 'approved' | 'rejected'
 }
 
 export interface Trip {
@@ -32,6 +47,7 @@ export interface Poll {
   createdAt: string
   endsAt?: string
   isActive: boolean
+  allowMultipleVotes?: boolean
 }
 
 export interface Celebration {
@@ -51,11 +67,19 @@ export interface WallPost {
   likes: string[]
 }
 
+export interface Album {
+  id: string
+  name: string
+  coverPhoto?: string
+  createdAt: string
+  createdBy: string
+}
+
 export interface Memory {
   id: string
   url: string
   caption?: string
-  category: 'trips' | 'festivals' | 'office'
+  albumId?: string
   uploadedBy: string
   uploadedAt: string
   tripId?: string
@@ -64,7 +88,8 @@ export interface Memory {
 
 export interface AppSettings {
   groupName: string
-  passwordHash: string
+  adminPasswordHash: string
+  userPasswordHash: string
 }
 
 export interface AppData {
@@ -75,5 +100,6 @@ export interface AppData {
   celebrations: Celebration[]
   posts: WallPost[]
   memories: Memory[]
+  albums: Album[]
   version: number
 }

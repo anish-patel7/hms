@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
 import { Plus, X } from 'lucide-react'
 import { addPoll } from '@/lib/storage'
 
@@ -24,6 +25,7 @@ interface CreatePollDialogProps {
 export function CreatePollDialog({ open, onOpenChange, onSuccess }: CreatePollDialogProps) {
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState(['', ''])
+  const [allowMultiple, setAllowMultiple] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const addOption = () => {
@@ -63,12 +65,14 @@ export function CreatePollDialog({ open, onOpenChange, onSuccess }: CreatePollDi
           votes: []
         })),
         createdBy: 'current-user',
-        isActive: true
+        isActive: true,
+        allowMultipleVotes: allowMultiple
       })
 
       // Reset form
       setQuestion('')
       setOptions(['', ''])
+      setAllowMultiple(false)
       
       onSuccess()
       onOpenChange(false)
@@ -138,6 +142,17 @@ export function CreatePollDialog({ open, onOpenChange, onSuccess }: CreatePollDi
               <p className="text-xs text-muted-foreground">
                 Add 2-6 options for people to vote on
               </p>
+            </div>
+
+            <div className="flex items-center gap-2 mt-2">
+              <Switch 
+                id="allow-multiple" 
+                checked={allowMultiple} 
+                onCheckedChange={setAllowMultiple} 
+              />
+              <Label htmlFor="allow-multiple" className="font-normal cursor-pointer text-sm">
+                Allow voters to select multiple options
+              </Label>
             </div>
           </div>
           <DialogFooter>

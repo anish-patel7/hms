@@ -52,7 +52,7 @@ const socialNavItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { logout, role } = useAuth()
   const [groupName, setGroupName] = useState('Team Voyage')
 
   useEffect(() => {
@@ -145,14 +145,16 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Settings">
-              <Link href="/settings">
-                <Settings />
-                <span>Settings</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {role === 'admin' && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Settings">
+                <Link href="/settings">
+                  <Settings />
+                  <span>Settings</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={logout}

@@ -11,12 +11,18 @@ import {
   Plus,
   Calendar,
   Image as ImageIcon,
-  Sparkles
+  Sparkles,
+  Trash2,
+  PlusCircle
 } from 'lucide-react'
-import { getCelebrations } from '@/lib/storage'
+import { getCelebrations, deleteCelebration, updateCelebration } from '@/lib/storage'
+import { compressImage } from '@/lib/image-utils'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { format, parseISO } from 'date-fns'
 import type { Celebration } from '@/lib/types'
 import { AddCelebrationDialog } from '@/components/celebrations/add-celebration-dialog'
+import { useAuth } from '@/components/auth/auth-provider'
 
 const categoryLabels: Record<string, { label: string; color: string }> = {
   diwali: { label: 'Diwali', color: 'bg-orange-500/10 text-orange-600 border-orange-500/20' },
@@ -27,6 +33,7 @@ const categoryLabels: Record<string, { label: string; color: string }> = {
 }
 
 export default function CelebrationsPage() {
+  const { role } = useAuth()
   const [celebrations, setCelebrations] = useState<Celebration[]>([])
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
@@ -52,10 +59,12 @@ export default function CelebrationsPage() {
           <h1 className="text-2xl font-bold">Festival Corner</h1>
           <p className="text-muted-foreground">Memories from our celebrations together</p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Celebration
-        </Button>
+        {role === 'admin' && (
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Celebration
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="all">
@@ -87,7 +96,23 @@ export default function CelebrationsPage() {
               return (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {filtered.map(celebration => (
-                    <Card key={celebration.id} className="overflow-hidden group">
+                    <Card key={celebration.id} className="overflow-hidden group relative">
+                      {role === 'admin' && (
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute z-10 top-2 left-2 w-8 h-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-destructive/90 bg-destructive text-destructive-foreground border-destructive"
+                          onClick={() => {
+                            if (confirm('Delete this celebration?')) {
+                              deleteCelebration(celebration.id)
+                              refreshCelebrations()
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
                       {celebration.photos.length > 0 ? (
                         <div className="relative aspect-[4/3]">
                           <img
@@ -97,15 +122,6 @@ export default function CelebrationsPage() {
                             crossOrigin="anonymous"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                          {celebration.photos.length > 1 && (
-                            <Badge 
-                              variant="secondary" 
-                              className="absolute top-3 right-3 bg-black/50 text-white border-none"
-                            >
-                              <ImageIcon className="h-3 w-3 mr-1" />
-                              {celebration.photos.length}
-                            </Badge>
-                          )}
                           <div className="absolute bottom-3 left-3 right-3">
                             <Badge className={categoryLabels[celebration.category].color}>
                               {categoryLabels[celebration.category].label}
@@ -127,31 +143,6 @@ export default function CelebrationsPage() {
                           <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
                             {celebration.captions[0]}
                           </p>
-                        )}
-                        
-                        {/* Photo thumbnails */}
-                        {celebration.photos.length > 1 && (
-                          <div className="flex gap-1 mt-3">
-                            {celebration.photos.slice(0, 4).map((photo, i) => (
-                              <button
-                                key={i}
-                                onClick={() => setSelectedPhoto(photo)}
-                                className="relative h-12 w-12 rounded overflow-hidden flex-shrink-0"
-                              >
-                                <img
-                                  src={photo}
-                                  alt=""
-                                  className="absolute inset-0 h-full w-full object-cover hover:opacity-80 transition-opacity"
-                                  crossOrigin="anonymous"
-                                />
-                                {i === 3 && celebration.photos.length > 4 && (
-                                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xs font-medium">
-                                    +{celebration.photos.length - 4}
-                                  </div>
-                                )}
-                              </button>
-                            ))}
-                          </div>
                         )}
                       </CardContent>
                     </Card>

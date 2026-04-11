@@ -11,19 +11,26 @@ import {
   Send,
   Trash2
 } from 'lucide-react'
-import { getPosts, getMembers, addPost, toggleLike, deletePost } from '@/lib/storage'
+import { getPosts, getMembers, addPost, toggleLike, deletePost, pullSharedData } from '@/lib/storage'
 import { format, parseISO, formatDistanceToNow } from 'date-fns'
 import type { WallPost, Member } from '@/lib/types'
-
-const CURRENT_USER_ID = 'current-user'
+import { useAuth } from '@/components/auth/auth-provider'
 
 export default function WallPage() {
+  const { userId, role } = useAuth()
+  const CURRENT_USER_ID = userId || 'admin'
   const [posts, setPosts] = useState<WallPost[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [newPostContent, setNewPostContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
+    // Pull cloud data first, then load
+    pullSharedData().then(() => {
+      setPosts(getPosts())
+      setMembers(getMembers())
+    })
+    // Also load local immediately
     setPosts(getPosts())
     setMembers(getMembers())
   }, [])
@@ -59,8 +66,17 @@ export default function WallPage() {
   }
 
   const getMemberName = (id: string) => {
-    if (id === CURRENT_USER_ID) return 'You'
-    return members.find(m => m.id === id)?.name || 'Unknown'
+    if (id === 'admin') return 'Administrator'
+    return members.find(m => m.id === id)?.name || 'Unknown User'
+  }
+
+  const renderAvatar = (id: string) => {
+    if (id === 'admin') return 'A'
+    const avatar = members.find(m => m.id === id)?.avatar
+    if (avatar) {
+      return <img src={avatar} alt="Profile" className="h-full w-full object-cover rounded-full" crossOrigin="anonymous" />
+    }
+    return getMemberInitials(id)
   }
 
   const getMemberInitials = (id: string) => {
@@ -79,8 +95,8 @@ export default function WallPage() {
       <Card>
         <CardContent className="p-4">
           <div className="flex gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium flex-shrink-0">
-              Y
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium flex-shrink-0 border border-primary/20">
+              {renderAvatar(CURRENT_USER_ID)}
             </div>
             <div className="flex-1 space-y-3">
               <Textarea
@@ -110,13 +126,14 @@ export default function WallPage() {
           {posts.map(post => {
             const isLiked = post.likes.includes(CURRENT_USER_ID)
             const isOwnPost = post.authorId === CURRENT_USER_ID
+            const canDelete = isOwnPost || role === 'admin'
             
             return (
               <Card key={post.id} className="overflow-hidden">
                 <CardContent className="p-4">
                   <div className="flex gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium flex-shrink-0">
-                      {getMemberInitials(post.authorId)}
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium flex-shrink-0 border border-primary/20">
+                      {renderAvatar(post.authorId)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
@@ -126,7 +143,7 @@ export default function WallPage() {
                             {formatDistanceToNow(parseISO(post.createdAt), { addSuffix: true })}
                           </span>
                         </div>
-                        {isOwnPost && (
+                        {canDelete && (
                           <Button
                             variant="ghost"
                             size="icon"

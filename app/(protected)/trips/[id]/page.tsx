@@ -14,11 +14,16 @@ import {
   Star,
   Image as ImageIcon,
   Edit,
-  Trash2
+  Trash2,
+  Camera
 } from 'lucide-react'
-import { getTrip, getMembers, deleteTrip } from '@/lib/storage'
+import { getTrip, getMembers, deleteTrip, updateTrip } from '@/lib/storage'
+import { compressImage } from '@/lib/image-utils'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { format, parseISO } from 'date-fns'
 import type { Trip, Member } from '@/lib/types'
+import { useAuth } from '@/components/auth/auth-provider'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function TripDetailPage() {
+  const { role } = useAuth()
   const params = useParams()
   const router = useRouter()
   const [trip, setTrip] = useState<Trip | null>(null)
@@ -52,6 +58,23 @@ export default function TripDetailPage() {
     if (trip) {
       deleteTrip(trip.id)
       router.push('/trips')
+    }
+  }
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && trip) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Photo size must be less than 10MB')
+        return
+      }
+      try {
+        const compressed = await compressImage(file, 1200, 1200, 0.7)
+        const updated = updateTrip(trip.id, { coverPhoto: compressed })
+        if (updated) setTrip(updated)
+      } catch (err) {
+        alert('Failed to process image')
+      }
     }
   }
 
@@ -81,27 +104,29 @@ export default function TripDetailPage() {
             {trip.location}
           </div>
         </div>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-destructive">
-              <Trash2 className="h-5 w-5" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete this trip?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete the trip and all its memories. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {role === 'admin' && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this trip?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the trip and all its memories. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {/* Hero Image */}
@@ -125,6 +150,14 @@ export default function TripDetailPage() {
             </Badge>
           </div>
         </div>
+        {role === 'admin' && (
+          <div className="absolute top-4 right-4 z-10">
+            <Input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" id="cover-photo-upload" />
+            <Label htmlFor="cover-photo-upload" className="cursor-pointer bg-black/40 hover:bg-black/60 text-white rounded-full p-2.5 block backdrop-blur-md transition-colors shadow-lg" title="Change Cover Photo">
+              <Camera className="h-5 w-5" />
+            </Label>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

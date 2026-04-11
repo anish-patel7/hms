@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,8 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { addTrip } from '@/lib/storage'
-import type { Member } from '@/lib/types'
+import { addTrip, updateTrip } from '@/lib/storage'
+import { compressImage } from '@/lib/image-utils'
+import type { Member, Trip } from '@/lib/types'
 
 interface TripFormDialogProps {
   open: boolean
@@ -22,9 +23,10 @@ interface TripFormDialogProps {
   onSuccess: () => void
   members: Member[]
   isUpcoming?: boolean
+  initialData?: Trip | null
 }
 
-export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcoming = false }: TripFormDialogProps) {
+export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcoming = false, initialData }: TripFormDialogProps) {
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -34,12 +36,51 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
   const [bestMoment, setBestMoment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Use useEffect to sync initialData when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setTitle(initialData.title)
+        setLocation(initialData.location)
+        setStartDate(initialData.startDate)
+        setEndDate(initialData.endDate)
+        setDescription(initialData.description)
+        setCoverPhoto(initialData.coverPhoto)
+        setBestMoment(initialData.bestMoment || '')
+      } else {
+        setTitle('')
+        setLocation('')
+        setStartDate('')
+        setEndDate('')
+        setDescription('')
+        setCoverPhoto('')
+        setBestMoment('')
+      }
+    }
+  }, [open, initialData])
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Photo size must be less than 10MB')
+        return
+      }
+      try {
+        const compressed = await compressImage(file, 1200, 1200, 0.7) // trips get higher res
+        setCoverPhoto(compressed)
+      } catch (err) {
+        alert('Failed to process image')
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
     try {
-      addTrip({
+      const tripData = {
         title,
         location,
         startDate,
@@ -47,15 +88,23 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
         description,
         coverPhoto: coverPhoto || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop',
         bestMoment: isUpcoming ? '' : bestMoment,
-        photos: [],
-        isPast: !isUpcoming,
-        rsvp: [],
-        checklist: isUpcoming ? [
-          { item: 'Book transportation', done: false },
-          { item: 'Reserve accommodation', done: false },
-          { item: 'Pack essentials', done: false }
-        ] : []
-      })
+      }
+
+      if (initialData) {
+        updateTrip(initialData.id, tripData)
+      } else {
+        addTrip({
+          ...tripData,
+          photos: [],
+          isPast: !isUpcoming,
+          rsvp: [],
+          checklist: isUpcoming ? [
+            { item: 'Book transportation', done: false },
+            { item: 'Reserve accommodation', done: false },
+            { item: 'Pack essentials', done: false }
+          ] : []
+        })
+      }
 
       // Reset form
       setTitle('')
@@ -77,9 +126,9 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isUpcoming ? 'Plan New Trip' : 'Add Trip Memory'}</DialogTitle>
+          <DialogTitle>{initialData ? 'Edit Trip' : isUpcoming ? 'Plan New Trip' : 'Add Trip Memory'}</DialogTitle>
           <DialogDescription>
-            {isUpcoming ? 'Set up details for your upcoming adventure' : 'Record a past trip to your memory vault'}
+            {initialData ? 'Update details for this trip' : isUpcoming ? 'Set up details for your upcoming adventure' : 'Record a past trip to your memory vault'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -137,15 +186,24 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="coverPhoto">Cover Photo URL</Label>
+              <Label htmlFor="coverPhoto">Cover Photo</Label>
               <Input
                 id="coverPhoto"
-                placeholder="https://..."
-                value={coverPhoto}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+              />
+              <div className="text-center text-xs text-muted-foreground my-1 font-medium">OR PULL FROM LINK</div>
+              <Input
+                placeholder="Paste an image URL directly here..."
+                value={coverPhoto && !coverPhoto.startsWith('data:image') ? coverPhoto : ''}
                 onChange={(e) => setCoverPhoto(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Paste an image URL or leave blank for a default image
+              {coverPhoto && coverPhoto.startsWith('data:image') && (
+                <div className="mt-1 text-sm text-green-600">Local photo attached successfully.</div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Upload an image, paste a link, or leave blank for default
               </p>
             </div>
             {!isUpcoming && (
@@ -165,7 +223,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : isUpcoming ? 'Plan Trip' : 'Add Memory'}
+              {isSubmitting ? 'Saving...' : initialData ? 'Save Changes' : isUpcoming ? 'Plan Trip' : 'Add Memory'}
             </Button>
           </DialogFooter>
         </form>

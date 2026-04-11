@@ -8,18 +8,28 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Empty } from '@/components/ui/empty'
 import { MapPin, Calendar, Users, Search, Plane, Plus } from 'lucide-react'
-import { getPastTrips, getMembers } from '@/lib/storage'
+import { getPastTrips, getMembers, pullSharedData } from '@/lib/storage'
 import { format, parseISO } from 'date-fns'
 import type { Trip, Member } from '@/lib/types'
+import { useAuth } from '@/components/auth/auth-provider'
 import { TripFormDialog } from '@/components/trips/trip-form-dialog'
 
 export default function TripsPage() {
+  const { role } = useAuth()
   const [trips, setTrips] = useState<Trip[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddDialog, setShowAddDialog] = useState(false)
 
   useEffect(() => {
+    // Pull cloud data first, then load
+    pullSharedData().then(() => {
+      setTrips(getPastTrips().sort((a, b) => 
+        new Date(b.endDate).getTime() - new Date(a.endDate).getTime()
+      ))
+      setMembers(getMembers())
+    })
+    // Also load local immediately
     setTrips(getPastTrips().sort((a, b) => 
       new Date(b.endDate).getTime() - new Date(a.endDate).getTime()
     ))
@@ -44,10 +54,12 @@ export default function TripsPage() {
           <h1 className="text-2xl font-bold">Past Trips</h1>
           <p className="text-muted-foreground">Relive your favorite memories</p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Trip
-        </Button>
+        {role === 'admin' && (
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Trip
+          </Button>
+        )}
       </div>
 
       <div className="relative">

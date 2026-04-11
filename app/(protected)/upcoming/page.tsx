@@ -13,20 +13,34 @@ import {
   CheckCircle2, 
   Clock,
   Plus,
-  Plane
+  Plane,
+  Trash2,
+  Edit2
 } from 'lucide-react'
-import { getUpcomingTrips, getMembers, updateTrip } from '@/lib/storage'
+import { getUpcomingTrips, getMembers, updateTrip, deleteTrip, pullSharedData } from '@/lib/storage'
+import { useAuth } from '@/components/auth/auth-provider'
 import { format, parseISO, differenceInDays } from 'date-fns'
 import type { Trip, Member } from '@/lib/types'
 import { TripFormDialog } from '@/components/trips/trip-form-dialog'
 
 export default function UpcomingPage() {
+  const { role } = useAuth()
   const [trips, setTrips] = useState<Trip[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [tripToEdit, setTripToEdit] = useState<Trip | null>(null)
 
   useEffect(() => {
+    // Pull cloud data first, then load
+    pullSharedData().then(() => {
+      const upcomingTrips = getUpcomingTrips().sort((a, b) => 
+        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+      )
+      setTrips(upcomingTrips)
+      setMembers(getMembers())
+    })
+    // Also load local immediately
     const upcomingTrips = getUpcomingTrips().sort((a, b) => 
       new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     )
@@ -84,6 +98,23 @@ export default function UpcomingPage() {
     setTrips(upcomingTrips)
   }
 
+  const handleDeleteTrip = (tripId: string) => {
+    if (confirm('Are you sure you want to completely erase this planned trip?')) {
+      deleteTrip(tripId)
+      refreshTrips()
+    }
+  }
+
+  const openEdit = (trip: Trip) => {
+    setTripToEdit(trip)
+    setShowAddDialog(true)
+  }
+
+  const handleOpenAdd = () => {
+    setTripToEdit(null)
+    setShowAddDialog(true)
+  }
+
   if (trips.length === 0) {
     return (
       <div className="space-y-6">
@@ -92,10 +123,12 @@ export default function UpcomingPage() {
             <h1 className="text-2xl font-bold">Upcoming Trips</h1>
             <p className="text-muted-foreground">Plan your next adventure</p>
           </div>
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Plan Trip
-          </Button>
+          {role === 'admin' && (
+            <Button onClick={handleOpenAdd}>
+              <Plus className="h-4 w-4 mr-2" />
+              Plan Trip
+            </Button>
+          )}
         </div>
         <Empty
           icon={<Plane className="h-12 w-12" />}
@@ -108,6 +141,7 @@ export default function UpcomingPage() {
           onSuccess={refreshTrips}
           members={members}
           isUpcoming
+          initialData={tripToEdit}
         />
       </div>
     )
@@ -120,15 +154,27 @@ export default function UpcomingPage() {
           <h1 className="text-2xl font-bold">Upcoming Trips</h1>
           <p className="text-muted-foreground">Get ready for your next adventure</p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Plan Trip
-        </Button>
+        {role === 'admin' && (
+          <Button onClick={handleOpenAdd}>
+            <Plus className="h-4 w-4 mr-2" />
+            Plan Trip
+          </Button>
+        )}
       </div>
 
       {/* Next Trip Hero */}
       {nextTrip && (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden relative group">
+          {role === 'admin' && (
+            <div className="absolute top-4 right-4 flex gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button size="icon" variant="secondary" className="h-8 w-8 bg-white/20 hover:bg-white/40 text-black shadow-lg backdrop-blur-md border-0" onClick={() => openEdit(nextTrip)}>
+                <Edit2 className="h-4 w-4 text-white" />
+              </Button>
+              <Button size="icon" variant="destructive" className="h-8 w-8 shadow-lg" onClick={() => handleDeleteTrip(nextTrip.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           <div className="relative h-64 md:h-80">
             <img
               src={nextTrip.coverPhoto}
@@ -235,7 +281,17 @@ export default function UpcomingPage() {
           <h2 className="text-lg font-semibold mb-4">More Planned Trips</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {trips.slice(1).map(trip => (
-              <Card key={trip.id} className="overflow-hidden">
+              <Card key={trip.id} className="overflow-hidden relative group">
+                {role === 'admin' && (
+                  <div className="absolute top-2 right-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button size="icon" variant="secondary" className="h-7 w-7 bg-white/20 hover:bg-white/40 backdrop-blur-md border-0" onClick={() => openEdit(trip)}>
+                      <Edit2 className="h-3 w-3 text-white" />
+                    </Button>
+                    <Button size="icon" variant="destructive" className="h-7 w-7" onClick={() => handleDeleteTrip(trip.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
                 <div className="relative h-32">
                   <img
                     src={trip.coverPhoto}
@@ -272,6 +328,7 @@ export default function UpcomingPage() {
         onSuccess={refreshTrips}
         members={members}
         isUpcoming
+        initialData={tripToEdit}
       />
     </div>
   )

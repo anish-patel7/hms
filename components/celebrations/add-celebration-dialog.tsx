@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { Plus, X } from 'lucide-react'
 import { addCelebration } from '@/lib/storage'
+import { compressImage } from '@/lib/image-utils'
 import type { Celebration } from '@/lib/types'
 
 interface AddCelebrationDialogProps {
@@ -34,26 +35,24 @@ export function AddCelebrationDialog({ open, onOpenChange, onSuccess }: AddCeleb
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
   const [category, setCategory] = useState<Celebration['category']>('other')
-  const [photos, setPhotos] = useState<string[]>([''])
+  const [photos, setPhotos] = useState<string[]>([])
   const [caption, setCaption] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const addPhotoField = () => {
-    if (photos.length < 6) {
-      setPhotos([...photos, ''])
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const compressed = await compressImage(file, 1200, 1200, 0.7)
+      setPhotos([compressed])
+    } catch (err) {
+      console.error(err)
     }
   }
 
-  const removePhotoField = (index: number) => {
-    if (photos.length > 1) {
-      setPhotos(photos.filter((_, i) => i !== index))
-    }
-  }
-
-  const updatePhoto = (index: number, value: string) => {
-    const newPhotos = [...photos]
-    newPhotos[index] = value
-    setPhotos(newPhotos)
+  const removePhoto = (index: number) => {
+    setPhotos(photos.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,13 +60,12 @@ export function AddCelebrationDialog({ open, onOpenChange, onSuccess }: AddCeleb
     setIsSubmitting(true)
 
     try {
-      const validPhotos = photos.filter(p => p.trim() !== '')
 
       addCelebration({
         title,
         date,
         category,
-        photos: validPhotos,
+        photos,
         captions: caption ? [caption] : []
       })
 
@@ -75,7 +73,7 @@ export function AddCelebrationDialog({ open, onOpenChange, onSuccess }: AddCeleb
       setTitle('')
       setDate('')
       setCategory('other')
-      setPhotos([''])
+      setPhotos([])
       setCaption('')
       
       onSuccess()
@@ -136,39 +134,30 @@ export function AddCelebrationDialog({ open, onOpenChange, onSuccess }: AddCeleb
             </div>
 
             <div className="grid gap-2">
-              <Label>Photo URLs</Label>
-              <div className="space-y-2">
+              <Label>Group Photo</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
                 {photos.map((photo, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      placeholder="https://..."
-                      value={photo}
-                      onChange={(e) => updatePhoto(index, e.target.value)}
-                    />
-                    {photos.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removePhotoField(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
+                  <div key={index} className="relative h-20 w-32 rounded border overflow-hidden">
+                    <img src={photo} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      className="absolute top-0 right-0 bg-black/50 text-white rounded-bl p-0.5 hover:bg-red-500 transition-colors"
+                      onClick={() => removePhoto(index)}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   </div>
                 ))}
               </div>
-              {photos.length < 6 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addPhotoField}
-                  className="mt-1"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Photo
-                </Button>
+              {photos.length === 0 && (
+                <div>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="cursor-pointer"
+                  />
+                </div>
               )}
             </div>
 
