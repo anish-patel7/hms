@@ -26,6 +26,27 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // Validates DD-MM format strictly
+  const isValidDDMM = (value: string): boolean => {
+    if (!/^\d{2}-\d{2}$/.test(value)) return false
+    const [dd, mm] = value.split('-').map(Number)
+    return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31
+  }
+
+  // Auto-formats date input: inserts '-' after 2 digits, strips non-digits except '-'
+  const handleDateInput = (raw: string, field: 'dob' | 'marriage_date') => {
+    // Remove everything except digits
+    let digits = raw.replace(/[^0-9]/g, '')
+    // Limit to 4 digits (DDMM)
+    digits = digits.slice(0, 4)
+    // Auto-insert hyphen after first 2 digits
+    let formatted = digits
+    if (digits.length > 2) {
+      formatted = digits.slice(0, 2) + '-' + digits.slice(2)
+    }
+    setFormData({ ...formData, [field]: formatted })
+  }
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -52,7 +73,17 @@ export default function SignupPage() {
     }
 
     if (formData.pin.length !== 4) {
-      setError('PIN must be exactly 4 characters.')
+      setError('PIN must be exactly 4 digits.')
+      return
+    }
+
+    if (!isValidDDMM(formData.dob)) {
+      setError('Date of Birth must be in DD-MM format (e.g. 15-08). Please correct it.')
+      return
+    }
+
+    if (formData.marriage_date && !isValidDDMM(formData.marriage_date)) {
+      setError('Marriage Date must be in DD-MM format (e.g. 25-12). Please correct it.')
       return
     }
 
@@ -128,10 +159,11 @@ export default function SignupPage() {
                   id="dob"
                   placeholder="E.g. 15-08"
                   value={formData.dob}
-                  onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                  onChange={(e) => handleDateInput(e.target.value, 'dob')}
                   disabled={loading}
                   maxLength={5}
                 />
+                <p className="text-xs text-muted-foreground">Format: DD-MM (day-month)</p>
               </div>
 
               <div className="space-y-2">
@@ -151,10 +183,11 @@ export default function SignupPage() {
                   id="marriage"
                   placeholder="E.g. 25-12"
                   value={formData.marriage_date}
-                  onChange={(e) => setFormData({ ...formData, marriage_date: e.target.value })}
+                  onChange={(e) => handleDateInput(e.target.value, 'marriage_date')}
                   disabled={loading}
                   maxLength={5}
                 />
+                <p className="text-xs text-muted-foreground">Format: DD-MM (day-month)</p>
               </div>
 
               <div className="space-y-2">

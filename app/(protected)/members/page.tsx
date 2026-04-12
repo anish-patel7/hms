@@ -225,43 +225,40 @@ export default function MembersPage() {
                 >
                   <div className="h-24 bg-gradient-to-r from-primary/30 via-accent/20 to-secondary/30 relative">
                     {role === 'admin' && (
-                      <div className="absolute top-3 right-3 flex gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="secondary"
-                          size="icon"
+                      <div className="absolute top-3 right-3 flex gap-1.5 z-10">
+                        <button
                           onClick={(e) => { e.stopPropagation(); handleOpenEditDetails(member); }}
-                          className="h-8 w-8 rounded-full shadow-sm hover:text-primary backdrop-blur-md bg-white/70"
+                          className="h-7 w-7 rounded-full flex items-center justify-center shadow-md backdrop-blur-md transition-all hover:scale-110"
+                          style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: '#93c5fd' }}
                           title="Edit Details"
                         >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="icon"
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
                           onClick={(e) => { e.stopPropagation(); setSelectedUserId(member.id); setShowPhotoDialog(true); }}
-                          className="h-8 w-8 rounded-full shadow-sm hover:text-primary backdrop-blur-md bg-white/70"
+                          className="h-7 w-7 rounded-full flex items-center justify-center shadow-md backdrop-blur-md transition-all hover:scale-110"
+                          style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: '#86efac' }}
                           title="Update Photo"
                         >
-                          <ImageIcon className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="icon"
+                          <ImageIcon className="h-3.5 w-3.5" />
+                        </button>
+                        <button
                           onClick={(e) => { e.stopPropagation(); setSelectedUserId(member.id); setShowResetDialog(true); }}
-                          className="h-8 w-8 rounded-full shadow-sm hover:text-amber-500 backdrop-blur-md bg-white/70"
+                          className="h-7 w-7 rounded-full flex items-center justify-center shadow-md backdrop-blur-md transition-all hover:scale-110"
+                          style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: '#fcd34d' }}
                           title="Reset Credentials"
                         >
-                          <Key className="h-4 w-4" />
-                        </Button>
+                          <Key className="h-3.5 w-3.5" />
+                        </button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button
-                              variant="secondary"
-                              size="icon"
-                              className="h-8 w-8 rounded-full shadow-sm hover:text-destructive backdrop-blur-md bg-white/70"
+                            <button
+                              className="h-7 w-7 rounded-full flex items-center justify-center shadow-md backdrop-blur-md transition-all hover:scale-110"
+                              style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: '#fca5a5' }}
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
@@ -286,21 +283,21 @@ export default function MembersPage() {
                   </div>
                   
                   <CardContent className="pt-0 px-6 pb-6 relative">
-                    <div className="absolute -top-12 left-6">
+                    <div className="absolute -top-8 left-6">
                       {member.avatar ? (
-                        <div className="h-24 w-24 rounded-full border-4 border-background overflow-hidden shadow-lg bg-background">
+                        <div className="h-16 w-16 rounded-full border-3 border-background overflow-hidden shadow-lg bg-background">
                           <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
                         </div>
                       ) : (
-                        <div className="h-24 w-24 rounded-full border-4 border-background bg-gradient-to-br from-primary/60 to-secondary/60 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                        <div className="h-16 w-16 rounded-full border-3 border-background bg-gradient-to-br from-primary/60 to-secondary/60 flex items-center justify-center text-xl font-bold text-white shadow-lg">
                           {member.name.split(' ').map(n => n[0]).join('')}
                         </div>
                       )}
                     </div>
 
-                    <div className="pt-16">
-                      <h3 className="font-bold text-xl truncate tracking-tight">{member.name}</h3>
-                      <p className="text-sm text-muted-foreground/80 mb-4">{member.area || 'Unknown Area'}</p>
+                    <div className="pt-10">
+                      <h3 className="font-bold text-lg truncate tracking-tight">{member.name}</h3>
+                      <p className="text-sm text-muted-foreground/80 mb-3">{member.area || 'Unknown Area'}</p>
                       
                       <div className="space-y-2">
                         <div className="flex items-center gap-3 text-sm px-3 py-2 bg-background/60 rounded-lg border border-border/50">
