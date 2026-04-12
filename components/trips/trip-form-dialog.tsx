@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { addTrip, updateTrip } from '@/lib/storage'
 import { compressImage } from '@/lib/image-utils'
+import { Users } from 'lucide-react'
 import type { Member, Trip } from '@/lib/types'
 
 interface TripFormDialogProps {
@@ -34,6 +36,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
   const [description, setDescription] = useState('')
   const [coverPhoto, setCoverPhoto] = useState('')
   const [bestMoment, setBestMoment] = useState('')
+  const [selectedTravelers, setSelectedTravelers] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Use useEffect to sync initialData when dialog opens
@@ -47,6 +50,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
         setDescription(initialData.description)
         setCoverPhoto(initialData.coverPhoto)
         setBestMoment(initialData.bestMoment || '')
+        setSelectedTravelers(initialData.rsvp?.filter(r => r.status === 'yes').map(r => r.memberId) || [])
       } else {
         setTitle('')
         setLocation('')
@@ -55,9 +59,24 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
         setDescription('')
         setCoverPhoto('')
         setBestMoment('')
+        setSelectedTravelers([])
       }
     }
   }, [open, initialData])
+
+  const toggleTraveler = (memberId: string) => {
+    setSelectedTravelers(prev => 
+      prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]
+    )
+  }
+
+  const selectAllTravelers = () => {
+    if (selectedTravelers.length === members.length) {
+      setSelectedTravelers([])
+    } else {
+      setSelectedTravelers(members.map(m => m.id))
+    }
+  }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -80,6 +99,8 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
     setIsSubmitting(true)
 
     try {
+      const rsvpList = selectedTravelers.map(memberId => ({ memberId, status: 'yes' as const }))
+
       const tripData = {
         title,
         location,
@@ -88,6 +109,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
         description,
         coverPhoto: coverPhoto || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop',
         bestMoment: isUpcoming ? '' : bestMoment,
+        rsvp: rsvpList,
       }
 
       if (initialData) {
@@ -97,7 +119,6 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
           ...tripData,
           photos: [],
           isPast: !isUpcoming,
-          rsvp: [],
           checklist: isUpcoming ? [
             { item: 'Book transportation', done: false },
             { item: 'Reserve accommodation', done: false },
@@ -114,6 +135,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
       setDescription('')
       setCoverPhoto('')
       setBestMoment('')
+      setSelectedTravelers([])
       
       onSuccess()
       onOpenChange(false)
@@ -124,7 +146,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{initialData ? 'Edit Trip' : isUpcoming ? 'Plan New Trip' : 'Add Trip Memory'}</DialogTitle>
           <DialogDescription>
@@ -175,6 +197,48 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
                 />
               </div>
             </div>
+
+            {/* Travelers Selection */}
+            {members.length > 0 && (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Travelers
+                    {selectedTravelers.length > 0 && (
+                      <span className="text-xs font-normal text-primary">({selectedTravelers.length} selected)</span>
+                    )}
+                  </Label>
+                  <Button type="button" variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={selectAllTravelers}>
+                    {selectedTravelers.length === members.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+                <div className="border rounded-lg p-2 max-h-40 overflow-y-auto space-y-1 bg-muted/20">
+                  {members.map(member => (
+                    <label
+                      key={member.id}
+                      className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                    >
+                      <Checkbox
+                        checked={selectedTravelers.includes(member.id)}
+                        onCheckedChange={() => toggleTraveler(member.id)}
+                      />
+                      <div className="flex items-center gap-2">
+                        {member.avatar ? (
+                          <img src={member.avatar} alt={member.name} className="h-6 w-6 rounded-full object-cover" crossOrigin="anonymous" />
+                        ) : (
+                          <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
+                            {member.name.split(' ').map(n => n[0]).join('')}
+                          </div>
+                        )}
+                        <span className="text-sm">{member.name}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
