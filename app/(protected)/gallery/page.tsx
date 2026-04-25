@@ -23,9 +23,12 @@ import {
   updateMemory, 
   deleteMemory,
   getMembers,
-  pullSharedData
+  pullSharedData,
+  uploadImageToCloud
 } from '@/lib/storage'
-import { compressImage } from '@/lib/image-utils'
+import { CloudImage } from '@/components/ui/cloud-image'
+import { compressImage, getStorageUsage, canUploadMore, STORAGE_LIMITS } from '@/lib/image-utils'
+import { getDirectImageUrl } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import type { Memory, Member, Album } from '@/lib/types'
 import { useAuth } from '@/components/auth/auth-provider'
@@ -61,16 +64,20 @@ export default function GalleryPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [editCaptionMode, setEditCaptionMode] = useState(false)
   const [newCaptionValue, setNewCaptionValue] = useState('')
+  const [urlInput, setUrlInput] = useState('')
+  const [storageUsage, setStorageUsage] = useState(getStorageUsage())
 
   useEffect(() => {
     // Pull cloud data first, then load
     pullSharedData().then(() => {
       refreshAlbums()
       setMembers(getMembers())
+      setStorageUsage(getStorageUsage())
     })
     // Also load local immediately
     refreshAlbums()
     setMembers(getMembers())
+    setStorageUsage(getStorageUsage())
   }, [])
 
   const refreshAlbums = () => {
@@ -92,7 +99,7 @@ export default function GalleryPage() {
     if (!newAlbumName.trim()) return
     addAlbum({
       name: newAlbumName,
-      coverPhoto: newAlbumCover || undefined,
+      coverPhoto: newAlbumCover ? getDirectImageUrl(newAlbumCover) : undefined,
       createdBy: 'admin'
     })
     setNewAlbumName('')
@@ -112,35 +119,116 @@ export default function GalleryPage() {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
 
+    // Check storage capacity
+    const storageCheck = canUploadMore()
+    if (!storageCheck.allowed) {
+      alert(storageCheck.reason)
+      return
+    }
+
+    // Enforce batch limit
+    const albumPhotoCount = memories.length + bulkFilesData.length
+    const remainingSlots = STORAGE_LIMITS.MAX_PHOTOS_PER_ALBUM - albumPhotoCount
+    if (remainingSlots <= 0) {
+      alert(`This album already has the maximum of ${STORAGE_LIMITS.MAX_PHOTOS_PER_ALBUM} photos. Please delete some photos first.`)
+      return
+    }
+
+    const maxFiles = Math.min(files.length, remainingSlots, STORAGE_LIMITS.MAX_BATCH_UPLOAD - bulkFilesData.length)
+    if (maxFiles < files.length) {
+      alert(`Only ${maxFiles} of ${files.length} photos will be added due to upload limits (max ${STORAGE_LIMITS.MAX_PHOTOS_PER_ALBUM} per album, max ${STORAGE_LIMITS.MAX_BATCH_UPLOAD} per batch).`)
+    }
+    const filesToProcess = files.slice(0, maxFiles)
+    if (filesToProcess.length === 0) return  
+
     setIsUploading(true)
     try {
-      const promises = files.map(file => compressImage(file, 800, 800, 0.5))
+      const promises = filesToProcess.map(file => compressImage(file, 600, 600, 0.4))
       const base64Array = await Promise.all(promises)
-      setBulkFilesData(base64Array.map(url => ({ url })))
-    } catch (err) {
-      alert('Failed to process image files')
+      setBulkFilesData(prev => [...prev, ...base64Array.map(url => ({ url }))])
+    } catch (err: any) {
+      alert(err?.message || 'Failed to process image files')
     } finally {
       setIsUploading(false)
     }
   }
 
-  const submitBulkUpload = () => {
+  const handleAddUrl = async () => {
+    if (!urlInput.trim()) return
+    const input = urlInput.trim()
+    
+    // Check if it's a google drive folder
+    if (input.includes('drive.google.com/drive/folders/')) {
+      setIsUploading(true)
+      try {
+        const res = await fetch('/api/drive-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: input })
+        })
+        const data = await res.json()
+        
+        if (data.ids && data.ids.length > 0) {
+          const directUrls = data.ids.map((id: string) => ({
+            url: `https://drive.google.com/thumbnail?id=${id}&sz=w1000`
+          }))
+          setBulkFilesData(prev => [...prev, ...directUrls])
+          alert(`Successfully extracted ${data.ids.length} photos from the folder!`)
+        } else {
+          alert('No accessible photos found in this folder. Make sure the folder is publicly accessible (Anyone with the link).')
+        }
+      } catch (err) {
+        alert('Failed to parse Google Drive folder.')
+      } finally {
+        setIsUploading(false)
+        setUrlInput('')
+      }
+      return
+    }
+
+    // Process as single file
+    const processedUrl = getDirectImageUrl(input)
+    setBulkFilesData(prev => [...prev, { url: processedUrl }])
+    setUrlInput('')
+  }
+
+  const submitBulkUpload = async () => {
     if (!activeAlbum || bulkFilesData.length === 0) return
+    
+    // Final storage check before saving
+    const storageCheck = canUploadMore()
+    if (!storageCheck.allowed) {
+      alert(storageCheck.reason)
+      return
+    }
+    
     setIsUploading(true)
     
-    // Process strictly synchronusly to not freeze UI immediately.
-    bulkFilesData.forEach(item => {
-      addMemory({
-        url: item.url,
-        albumId: activeAlbum.id,
-        uploadedBy: 'admin'
-      })
-    })
+    try {
+      for (const item of bulkFilesData) {
+        let finalUrl = item.url
+        // If it's a base64 string, upload it to cloud first
+        if (finalUrl.startsWith('data:image')) {
+          finalUrl = await uploadImageToCloud(finalUrl)
+        }
+        
+        addMemory({
+          url: finalUrl,
+          albumId: activeAlbum.id,
+          uploadedBy: 'admin'
+        })
+      }
 
-    setBulkFilesData([])
-    setShowBulkUpload(false)
-    setIsUploading(false)
-    refreshMemories(activeAlbum.id)
+      setBulkFilesData([])
+      setShowBulkUpload(false)
+      refreshMemories(activeAlbum.id)
+      setStorageUsage(getStorageUsage())
+    } catch (err) {
+      console.error(err)
+      alert('Failed to save some photos to the cloud storage. Please try again.')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const saveCaptionEdit = () => {
@@ -159,6 +247,7 @@ export default function GalleryPage() {
     deleteMemory(selectedPhoto.id)
     setSelectedPhoto(null)
     if (activeAlbum) refreshMemories(activeAlbum.id)
+    setStorageUsage(getStorageUsage())
   }
 
   const getMemberName = (id: string) => members.find(m => m.id === id)?.name || 'Admin'
@@ -173,11 +262,16 @@ export default function GalleryPage() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold">{activeAlbum.name}</h1>
-              <p className="text-muted-foreground">{memories.length} photos</p>
+              <p className="text-muted-foreground">
+                {memories.length} photos
+              </p>
             </div>
           </div>
           {role === 'admin' && (
-            <Button onClick={() => setShowBulkUpload(true)} className="bg-primary hover:bg-primary/90">
+            <Button 
+              onClick={() => setShowBulkUpload(true)} 
+              className="bg-primary hover:bg-primary/90"
+            >
               <UploadCloud className="h-4 w-4 mr-2" />
               Upload Photos
             </Button>
@@ -198,11 +292,10 @@ export default function GalleryPage() {
                 className="break-inside-avoid cursor-pointer group relative rounded-lg overflow-hidden"
                 onClick={() => setSelectedPhoto(memory)}
               >
-                <img
+                <CloudImage
                   src={memory.url}
                   alt={memory.caption || 'Memory'}
                   className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-105"
-                  crossOrigin="anonymous"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
               </div>
@@ -213,21 +306,43 @@ export default function GalleryPage() {
         <Dialog open={showBulkUpload} onOpenChange={setShowBulkUpload}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Upload Photos to {activeAlbum.name}</DialogTitle>
+              <DialogTitle>Add Photos to {activeAlbum.name}</DialogTitle>
               <DialogDescription>
-                Select multiple photos to bulk upload into this album. Max 2MB per photo recommended.
+                Select files to upload, or paste a Google Drive / Image URL.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <Input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleBulkUploadConvert}
-                disabled={isUploading}
-              />
+              <div className="grid gap-2">
+                <Label>Upload Files</Label>
+                <Input
+                  type="file"
+                  multiple
+                  accept="image/jpeg, image/png, image/webp, image/gif"
+                  onChange={handleBulkUploadConvert}
+                  disabled={isUploading}
+                />
+              </div>
+              
+              <div className="flex items-end gap-2">
+                <div className="grid gap-2 flex-grow">
+                  <Label>Or Paste Image/Drive URL</Label>
+                  <Input
+                    placeholder="https://drive.google.com/..."
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                  />
+                </div>
+                <Button variant="secondary" onClick={handleAddUrl} disabled={!urlInput.trim()}>
+                  Add URL
+                </Button>
+              </div>
+
               {bulkFilesData.length > 0 && (
-                <p className="text-sm text-green-600">{bulkFilesData.length} photo(s) ready for upload.</p>
+                <div className="space-y-1">
+                  <p className="text-sm text-green-600 font-medium">
+                    {bulkFilesData.length} photo(s) selected and ready to save.
+                  </p>
+                </div>
               )}
             </div>
             <DialogFooter>
@@ -235,7 +350,7 @@ export default function GalleryPage() {
                 Cancel
               </Button>
               <Button onClick={submitBulkUpload} disabled={isUploading || bulkFilesData.length === 0}>
-                {isUploading ? 'Uploading...' : 'Save Photos'}
+                {isUploading ? 'Saving...' : 'Save Photos'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -275,11 +390,10 @@ export default function GalleryPage() {
             </div>
 
             <div className="max-w-5xl w-full flex flex-col items-center" onClick={e => e.stopPropagation()}>
-              <img
+              <CloudImage
                 src={selectedPhoto.url}
                 alt={selectedPhoto.caption || 'Memory'}
                 className="max-h-[75vh] mx-auto object-contain rounded-lg shadow-2xl"
-                crossOrigin="anonymous"
               />
               
               <div className="mt-6 text-center text-white p-4 w-full max-w-xl mx-auto rounded-lg bg-black/40">
@@ -342,7 +456,7 @@ export default function GalleryPage() {
                       src={coverUrl}
                       alt={album.name}
                       className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      crossOrigin="anonymous"
+                      
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center">

@@ -180,7 +180,7 @@ export default function UpcomingPage() {
               src={nextTrip.coverPhoto}
               alt={nextTrip.title}
               className="absolute inset-0 h-full w-full object-cover"
-              crossOrigin="anonymous"
+              
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
@@ -297,7 +297,7 @@ export default function UpcomingPage() {
                     src={trip.coverPhoto}
                     alt={trip.title}
                     className="absolute inset-0 h-full w-full object-cover"
-                    crossOrigin="anonymous"
+                    
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-2 left-3 right-3 text-white">

@@ -18,9 +18,14 @@ import {
   Heart,
   PartyPopper
 } from 'lucide-react'
-import { getSettings, getUpcomingTrips, getPastTrips, getActivePolls, getMembers, getPosts, syncUsersFromSupabase, pullSharedData } from '@/lib/storage'
+import { getSettings, getUpcomingTrips, getPastTrips, getActivePolls, getMembers, getPosts, getMemories, syncUsersFromSupabase, pullSharedData, updateSettings } from '@/lib/storage'
 import { differenceInDays, parseISO, format } from 'date-fns'
-import type { Trip, Poll, Member, WallPost } from '@/lib/types'
+import type { Trip, Poll, Member, WallPost, Memory } from '@/lib/types'
+import { CloudImage } from '@/components/ui/cloud-image'
+import { useAuth } from '@/components/auth/auth-provider'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 function getUpcomingBirthdays(members: Member[], days: number = 7) {
   const today = new Date()
@@ -56,28 +61,48 @@ function getUpcomingBirthdays(members: Member[], days: number = 7) {
   return upcoming.sort((a, b) => a.daysUntil - b.daysUntil)
 }
 
+function getEmbedUrl(url: string) {
+  if (!url) return null;
+  if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    const videoId = url.includes('youtu.be') 
+      ? url.split('youtu.be/')[1]?.split('?')[0]
+      : url.split('v=')[1]?.split('&')[0];
+    if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0`;
+  }
+  return url;
+}
+
 export default function HomePage() {
   const [groupName, setGroupName] = useState('Team Voyage')
   const [upcomingTrip, setUpcomingTrip] = useState<Trip | null>(null)
-  const [latestTrip, setLatestTrip] = useState<Trip | null>(null)
+  const [randomPastTrip, setRandomPastTrip] = useState<Trip | null>(null)
   const [activePolls, setActivePolls] = useState<Poll[]>([])
   const [upcomingBirthdays, setUpcomingBirthdays] = useState<Array<{ member: Member; daysUntil: number }>>([])
   const [recentPosts, setRecentPosts] = useState<WallPost[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+  const [entertainmentUrl, setEntertainmentUrl] = useState<string | null>(null)
+  const [showEditEntertainment, setShowEditEntertainment] = useState(false)
+  const [newEntertainmentUrl, setNewEntertainmentUrl] = useState('')
+  const { role } = useAuth()
 
   const loadAllData = () => {
-    setGroupName(getSettings().groupName)
+    const settings = getSettings()
+    setGroupName(settings.groupName)
+    setEntertainmentUrl(settings.entertainmentUrl || null)
+    setNewEntertainmentUrl(settings.entertainmentUrl || '')
     const upcoming = getUpcomingTrips()
     const past = getPastTrips()
     const polls = getActivePolls()
     const posts = getPosts()
+    const memories = getMemories()
 
     if (upcoming.length > 0) {
       setUpcomingTrip(upcoming.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())[0])
     }
     if (past.length > 0) {
-      setLatestTrip(past.sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0])
+      const randomIndex = Math.floor(Math.random() * past.length)
+      setRandomPastTrip(past[randomIndex])
     }
 
     setActivePolls(polls.slice(0, 2))
@@ -134,6 +159,15 @@ export default function HomePage() {
   const todayStrOldFormat = format(new Date(), 'MM-dd')
   const todayStrNewFormat = format(new Date(), 'dd-MM')
 
+  const handleUpdateEntertainment = () => {
+    updateSettings({ entertainmentUrl: newEntertainmentUrl })
+    setEntertainmentUrl(newEntertainmentUrl)
+    setShowEditEntertainment(false)
+  }
+
+  const embedUrl = entertainmentUrl ? getEmbedUrl(entertainmentUrl) : null;
+  const isVideo = embedUrl?.includes('youtube.com') || embedUrl?.includes('vimeo.com') || embedUrl?.endsWith('.mp4');
+
   const approvedMembers = members.filter(m => m.status === 'approved' || !m.status)
   
   const todaysBirthdays = approvedMembers.filter(m => {
@@ -170,7 +204,7 @@ export default function HomePage() {
               <div className="absolute right-0 top-0 h-full w-32 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/confetti.png')] mix-blend-overlay"></div>
               <CardContent className="p-6 flex items-center gap-4">
                 {m.avatar ? (
-                  <img src={m.avatar} alt={m.name} className="h-16 w-16 rounded-full border-2 border-accent object-cover flex-shrink-0" crossOrigin="anonymous" />
+                  <img src={m.avatar} alt={m.name} className="h-16 w-16 rounded-full border-2 border-accent object-cover flex-shrink-0"  />
                 ) : (
                   <div className="h-16 w-16 rounded-full border-2 border-accent bg-background flex items-center justify-center">
                     <Cake className="h-8 w-8 text-accent" />
@@ -192,7 +226,7 @@ export default function HomePage() {
               <div className="absolute right-0 top-0 h-full w-32 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/confetti.png')] mix-blend-overlay"></div>
               <CardContent className="p-6 flex items-center gap-4">
                 {m.avatar ? (
-                  <img src={m.avatar} alt={m.name} className="h-16 w-16 rounded-full border-2 border-pink-500 object-cover flex-shrink-0" crossOrigin="anonymous" />
+                  <img src={m.avatar} alt={m.name} className="h-16 w-16 rounded-full border-2 border-pink-500 object-cover flex-shrink-0"  />
                 ) : (
                   <div className="h-16 w-16 rounded-full border-2 border-pink-500 bg-background flex items-center justify-center">
                     <Heart className="h-8 w-8 text-pink-500" />
@@ -220,7 +254,7 @@ export default function HomePage() {
                 src={upcomingTrip.coverPhoto}
                 alt={upcomingTrip.title}
                 className="absolute inset-0 h-full w-full object-cover"
-                crossOrigin="anonymous"
+                
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent md:bg-gradient-to-r" />
               <div className="absolute bottom-4 left-4 md:hidden">
@@ -359,27 +393,25 @@ export default function HomePage() {
             </Button>
           </CardContent>
         </Card>
-        
-        {latestTrip && (
+        {randomPastTrip && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <Image className="h-5 w-5 text-primary" />
-                Latest Memory
+                Trip Memory
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Link href={`/trips/${latestTrip.id}`} className="block group">
+              <Link href={`/trips/${randomPastTrip.id}`} className="block group">
                 <div className="relative aspect-video rounded-lg overflow-hidden mb-3">
-                  <img
-                    src={latestTrip.coverPhoto}
-                    alt={latestTrip.title}
+                  <CloudImage
+                    src={randomPastTrip.coverPhoto || ''}
+                    alt={randomPastTrip.title}
                     className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
-                    crossOrigin="anonymous"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-3 left-3 right-3 text-white">
-                    <p className="font-medium text-lg">{latestTrip.title}</p>
+                    <p className="font-medium text-lg">{randomPastTrip.title}</p>
                   </div>
                 </div>
               </Link>
@@ -387,6 +419,76 @@ export default function HomePage() {
           </Card>
         )}
       </div>
+
+      {/* Entertainment Screen */}
+      <Card className="overflow-hidden border-primary/10">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <PartyPopper className="h-5 w-5 text-accent" />
+            Entertainment
+          </CardTitle>
+          {role === 'admin' && (
+            <Button variant="ghost" size="sm" onClick={() => setShowEditEntertainment(true)}>
+              Edit Media
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {embedUrl ? (
+            <div className="relative w-full rounded-lg overflow-hidden bg-black max-w-3xl mx-auto" style={{ aspectRatio: '16/9' }}>
+              {isVideo ? (
+                <iframe
+                  src={embedUrl}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full border-0"
+                />
+              ) : (
+                <CloudImage
+                  src={embedUrl}
+                  alt="Entertainment"
+                  className="absolute inset-0 w-full h-full object-contain"
+                />
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-muted/30 rounded-lg max-w-3xl mx-auto border border-dashed">
+              <PartyPopper className="h-10 w-10 mb-4 opacity-50" />
+              <p>No entertainment media set.</p>
+              {role === 'admin' && (
+                <Button variant="outline" className="mt-4" onClick={() => setShowEditEntertainment(true)}>
+                  Set YouTube or Image Link
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showEditEntertainment} onOpenChange={setShowEditEntertainment}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Entertainment Screen</DialogTitle>
+            <DialogDescription>
+              Paste a YouTube link or any image URL to display it for the whole team.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Media URL</Label>
+              <Input
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={newEntertainmentUrl}
+                onChange={(e) => setNewEntertainmentUrl(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditEntertainment(false)}>Cancel</Button>
+            <Button onClick={handleUpdateEntertainment}>Save Media</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

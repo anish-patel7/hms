@@ -286,7 +286,7 @@ export default function MembersPage() {
                     <div className="absolute -top-8 left-6">
                       {member.avatar ? (
                         <div className="h-16 w-16 rounded-full border-3 border-background overflow-hidden shadow-lg bg-background">
-                          <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
+                          <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" />
                         </div>
                       ) : (
                         <div className="h-16 w-16 rounded-full border-3 border-background bg-gradient-to-br from-primary/60 to-secondary/60 flex items-center justify-center text-xl font-bold text-white shadow-lg">
@@ -340,7 +340,7 @@ export default function MembersPage() {
                       <div className="absolute -top-10 left-6">
                        {member.avatar ? (
                          <div className="h-20 w-20 rounded-full border-4 border-background overflow-hidden shadow-lg bg-background">
-                           <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
+                           <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" />
                          </div>
                        ) : (
                          <div className="h-20 w-20 rounded-full border-4 border-background bg-gradient-to-br from-muted-foreground/30 to-muted/30 flex items-center justify-center text-2xl font-bold text-foreground shadow-lg">
@@ -490,7 +490,7 @@ export default function MembersPage() {
                 <div className="absolute -top-16 left-6">
                   {viewingMember.avatar ? (
                     <div className="h-32 w-32 rounded-full border-4 border-background overflow-hidden shadow-2xl bg-background">
-                      <img src={viewingMember.avatar} alt={viewingMember.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
+                      <img src={viewingMember.avatar} alt={viewingMember.name} className="h-full w-full object-cover" />
                     </div>
                   ) : (
                     <div className="h-32 w-32 rounded-full border-4 border-background bg-gradient-to-br from-primary/60 to-secondary/60 flex items-center justify-center text-4xl font-bold text-white shadow-2xl">

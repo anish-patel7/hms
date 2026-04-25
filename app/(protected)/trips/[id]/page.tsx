@@ -64,16 +64,16 @@ export default function TripDetailPage() {
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && trip) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Photo size must be less than 10MB')
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Photo size must be less than 5MB')
         return
       }
       try {
-        const compressed = await compressImage(file, 1200, 1200, 0.7)
+        const compressed = await compressImage(file, 800, 800, 0.5)
         const updated = updateTrip(trip.id, { coverPhoto: compressed })
         if (updated) setTrip(updated)
-      } catch (err) {
-        alert('Failed to process image')
+      } catch (err: any) {
+        alert(err?.message || 'Failed to process image')
       }
     }
   }
@@ -135,7 +135,7 @@ export default function TripDetailPage() {
           src={trip.coverPhoto}
           alt={trip.title}
           className="absolute inset-0 h-full w-full object-cover"
-          crossOrigin="anonymous"
+          
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-6 left-6 right-6 text-white">
@@ -209,7 +209,7 @@ export default function TripDetailPage() {
                         src={photo}
                         alt={`Trip photo ${index + 1}`}
                         className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-110"
-                        crossOrigin="anonymous"
+                        
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                     </button>
@@ -280,7 +280,7 @@ export default function TripDetailPage() {
             src={selectedPhoto}
             alt="Full size"
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
-            crossOrigin="anonymous"
+            
           />
         </div>
       )}

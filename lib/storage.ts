@@ -672,3 +672,41 @@ export async function syncUsersFromSupabase() {
   }
   return null
 }
+
+// Image Cloud Storage Bypass Helpers
+export async function uploadImageToCloud(base64: string): Promise<string> {
+  const imageId = `supabase-img-${crypto.randomUUID()}`
+  const { error } = await supabase
+    .from('shared_data')
+    .upsert({ 
+      id: imageId, 
+      data: { base64 }, 
+      updated_at: new Date().toISOString() 
+    })
+    
+  if (error) {
+    console.error('Failed to upload image to cloud:', error)
+    throw new Error('Failed to upload image to cloud storage.')
+  }
+  
+  return imageId
+}
+
+export async function fetchImageFromCloud(imageId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('shared_data')
+      .select('data')
+      .eq('id', imageId)
+      .single()
+      
+    if (error || !data || !data.data) {
+      return null
+    }
+    
+    return (data.data as any).base64 || null
+  } catch (err) {
+    console.error('Failed to fetch image from cloud:', err)
+    return null
+  }
+}

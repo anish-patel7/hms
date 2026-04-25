@@ -158,7 +158,10 @@ export default function PollsPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               {activePolls.map(poll => {
                 const totalVotes = poll.options.reduce((acc, opt) => acc + opt.votes.length, 0)
-                const hasVoted = votedPolls.has(poll.id)
+                // Check if the current user actually voted (look in vote arrays for their userId)
+                const currentUserId = userId || ''
+                const userActuallyVoted = poll.options.some(opt => opt.votes.includes(currentUserId))
+                const hasVoted = votedPolls.has(poll.id) || userActuallyVoted
                 const chartData = poll.options.map((opt, i) => ({
                   name: opt.text.length > 15 ? opt.text.substring(0, 15) + '...' : opt.text,
                   votes: opt.votes.length,
@@ -198,29 +201,57 @@ export default function PollsPage() {
                               </BarChart>
                             </ResponsiveContainer>
                           </ChartContainer>
-                          <div className="mt-4 border-t pt-4">
-                            <p className="text-sm font-semibold mb-2 flex items-center gap-2">
-                              <Users className="h-4 w-4" />
-                              Voter Breakdown ({totalVotes} total votes)
-                            </p>
-                            <div className="space-y-3 mt-3">
-                              {poll.options.filter(o => o.votes.length > 0).map(opt => (
-                                <div key={opt.id} className="text-sm p-3 rounded-lg bg-muted/50">
-                                  <div className="font-semibold text-primary mb-1 flex justify-between">
-                                    <span>{opt.text}</span>
-                                    <Badge variant="secondary" className="text-xs">{opt.votes.length}</Badge>
+
+                          {/* Voter breakdown - visible ONLY to admin */}
+                          {role === 'admin' && (
+                            <div className="mt-4 border-t pt-4">
+                              <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                Voter Breakdown ({totalVotes} total votes)
+                              </p>
+                              <div className="space-y-3 mt-3">
+                                {poll.options.filter(o => o.votes.length > 0).map(opt => (
+                                  <div key={opt.id} className="text-sm p-3 rounded-lg bg-muted/50">
+                                    <div className="font-semibold text-primary mb-1 flex justify-between">
+                                      <span>{opt.text}</span>
+                                      <Badge variant="secondary" className="text-xs">{opt.votes.length}</Badge>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1 text-muted-foreground mt-2">
+                                      {opt.votes.map(vId => (
+                                        <span key={vId} className="bg-background border px-2 py-0.5 rounded text-xs">
+                                          {getMemberName(vId)}
+                                        </span>
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="flex flex-wrap gap-1 text-muted-foreground mt-2">
-                                    {opt.votes.map(vId => (
-                                      <span key={vId} className="bg-background border px-2 py-0.5 rounded text-xs">
-                                        {getMemberName(vId)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
+
+                          {/* Regular users see only total vote count per option (no names) */}
+                          {role !== 'admin' && (
+                            <div className="mt-4 border-t pt-4">
+                              <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                Results ({totalVotes} total votes)
+                              </p>
+                              <div className="space-y-2 mt-3">
+                                {poll.options.map(opt => {
+                                  const pct = totalVotes > 0 ? Math.round((opt.votes.length / totalVotes) * 100) : 0
+                                  return (
+                                    <div key={opt.id} className="text-sm">
+                                      <div className="flex justify-between mb-1">
+                                        <span>{opt.text}</span>
+                                        <span className="text-muted-foreground">{opt.votes.length} votes ({pct}%)</span>
+                                      </div>
+                                      <Progress value={pct} className="h-2" />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
                           
                           <div className="flex items-center justify-end mt-4">
                             {role === 'admin' && (
@@ -351,29 +382,56 @@ export default function PollsPage() {
                         </ResponsiveContainer>
                       </ChartContainer>
 
-                      <div className="mt-4 border-t pt-4">
-                        <p className="text-sm font-semibold mb-2 flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          Complete Voter Breakdown ({totalVotes} total votes)
-                        </p>
-                        <div className="space-y-3 mt-3">
-                          {poll.options.filter(o => o.votes.length > 0).map(opt => (
-                            <div key={opt.id} className="text-sm p-3 rounded-lg bg-muted/50">
-                              <div className="font-semibold text-primary mb-1 flex justify-between">
-                                <span>{opt.text}</span>
-                                <Badge variant="secondary" className="text-xs">{opt.votes.length}</Badge>
+                      {/* Voter breakdown - visible ONLY to admin */}
+                      {role === 'admin' && (
+                        <div className="mt-4 border-t pt-4">
+                          <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Complete Voter Breakdown ({totalVotes} total votes)
+                          </p>
+                          <div className="space-y-3 mt-3">
+                            {poll.options.filter(o => o.votes.length > 0).map(opt => (
+                              <div key={opt.id} className="text-sm p-3 rounded-lg bg-muted/50">
+                                <div className="font-semibold text-primary mb-1 flex justify-between">
+                                  <span>{opt.text}</span>
+                                  <Badge variant="secondary" className="text-xs">{opt.votes.length}</Badge>
+                                </div>
+                                <div className="flex flex-wrap gap-1 text-muted-foreground mt-2">
+                                  {opt.votes.map(vId => (
+                                    <span key={vId} className="bg-background border px-2 py-0.5 rounded text-xs">
+                                      {getMemberName(vId)}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
-                              <div className="flex flex-wrap gap-1 text-muted-foreground mt-2">
-                                {opt.votes.map(vId => (
-                                  <span key={vId} className="bg-background border px-2 py-0.5 rounded text-xs">
-                                    {getMemberName(vId)}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
+
+                      {/* Regular users see only vote counts (no names) */}
+                      {role !== 'admin' && (
+                        <div className="mt-4 border-t pt-4">
+                          <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Final Results ({totalVotes} total votes)
+                          </p>
+                          <div className="space-y-2 mt-3">
+                            {poll.options.map(opt => {
+                              const pct = totalVotes > 0 ? Math.round((opt.votes.length / totalVotes) * 100) : 0
+                              return (
+                                <div key={opt.id} className="text-sm">
+                                  <div className="flex justify-between mb-1">
+                                    <span>{opt.text}</span>
+                                    <span className="text-muted-foreground">{opt.votes.length} votes ({pct}%)</span>
+                                  </div>
+                                  <Progress value={pct} className="h-2" />
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )

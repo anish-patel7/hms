@@ -119,7 +119,7 @@ export default function CelebrationsPage() {
                             src={celebration.photos[0]}
                             alt={celebration.title}
                             className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
-                            crossOrigin="anonymous"
+                            
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                           <div className="absolute bottom-3 left-3 right-3">
@@ -176,7 +176,7 @@ export default function CelebrationsPage() {
             src={selectedPhoto}
             alt="Full size"
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
-            crossOrigin="anonymous"
+            
           />
         </div>
       )}

@@ -50,15 +50,16 @@ export default function SignupPage() {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.size > 10 * 1024 * 1024) { // Now allow up to 10MB since we compress
-        setError('Photo size must be less than 10MB')
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Photo size must be less than 5MB')
         return
       }
       try {
-        const compressed = await compressImage(file)
+        // Profile photos are small thumbnails — compress aggressively
+        const compressed = await compressImage(file, 400, 400, 0.5)
         setProfilePhoto(compressed)
-      } catch (err) {
-        setError('Failed to process image')
+      } catch (err: any) {
+        setError(err?.message || 'Failed to process image')
       }
     }
   }

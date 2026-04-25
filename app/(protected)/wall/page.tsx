@@ -74,7 +74,7 @@ export default function WallPage() {
     if (id === 'admin') return 'A'
     const avatar = members.find(m => m.id === id)?.avatar
     if (avatar) {
-      return <img src={avatar} alt="Profile" className="h-full w-full object-cover rounded-full" crossOrigin="anonymous" />
+      return <img src={avatar} alt="Profile" className="h-full w-full object-cover rounded-full"  />
     }
     return getMemberInitials(id)
   }

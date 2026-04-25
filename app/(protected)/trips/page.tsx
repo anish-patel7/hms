@@ -82,7 +82,7 @@ export default function TripsPage() {
                     src={trip.coverPhoto}
                     alt={trip.title}
                     className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105"
-                    crossOrigin="anonymous"
+                    
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-4 text-white">

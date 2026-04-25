@@ -117,7 +117,7 @@ export default function BirthdaysPage() {
                   <div className="relative">
                     {event.member.avatar ? (
                       <div className="h-32 w-32 md:h-40 md:w-40 rounded-full border-4 border-background overflow-hidden shadow-2xl">
-                        <img src={event.member.avatar} alt={event.member.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
+                        <img src={event.member.avatar} alt={event.member.name} className="h-full w-full object-cover" />
                       </div>
                     ) : (
                       <div className="h-32 w-32 md:h-40 md:w-40 rounded-full border-4 border-background bg-gradient-to-br from-primary/60 to-accent/60 flex items-center justify-center text-5xl font-bold text-white shadow-2xl">
@@ -171,7 +171,7 @@ export default function BirthdaysPage() {
                       <div className="flex items-center gap-4">
                         {member.avatar ? (
                           <div className="h-12 w-12 rounded-full overflow-hidden shrink-0 shadow-sm">
-                            <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
+                            <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" />
                           </div>
                         ) : (
                           <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
@@ -214,7 +214,7 @@ export default function BirthdaysPage() {
                       <div className="flex items-center gap-4">
                         {member.avatar ? (
                           <div className="h-12 w-12 rounded-full overflow-hidden shrink-0 shadow-sm">
-                            <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
+                            <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" />
                           </div>
                         ) : (
                           <div className="h-12 w-12 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-bold text-lg shrink-0">
@@ -254,7 +254,7 @@ export default function BirthdaysPage() {
                       <div className="flex items-center gap-3 min-w-0">
                         {member.avatar ? (
                           <div className="h-10 w-10 rounded-full overflow-hidden shrink-0">
-                            <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" crossOrigin="anonymous"/>
+                            <img src={member.avatar} alt={member.name} className="h-full w-full object-cover" />
                           </div>
                         ) : (
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center font-medium shrink-0">

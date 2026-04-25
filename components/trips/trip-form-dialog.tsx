@@ -81,15 +81,15 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Photo size must be less than 10MB')
+      if (file.size > 50 * 1024 * 1024) {
+        alert('Photo size must be less than 50MB')
         return
       }
       try {
         const compressed = await compressImage(file, 1200, 1200, 0.7) // trips get higher res
         setCoverPhoto(compressed)
-      } catch (err) {
-        alert('Failed to process image')
+      } catch (err: any) {
+        alert(err.message || 'Failed to process image')
       }
     }
   }
@@ -225,7 +225,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
                       />
                       <div className="flex items-center gap-2">
                         {member.avatar ? (
-                          <img src={member.avatar} alt={member.name} className="h-6 w-6 rounded-full object-cover" crossOrigin="anonymous" />
+                          <img src={member.avatar} alt={member.name} className="h-6 w-6 rounded-full object-cover"  />
                         ) : (
                           <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
                             {member.name.split(' ').map(n => n[0]).join('')}
@@ -254,7 +254,7 @@ export function TripFormDialog({ open, onOpenChange, onSuccess, members, isUpcom
               <Input
                 id="coverPhoto"
                 type="file"
-                accept="image/*"
+                accept="image/jpeg, image/png, image/webp, image/gif"
                 onChange={handlePhotoUpload}
               />
               <div className="text-center text-xs text-muted-foreground my-1 font-medium">OR PULL FROM LINK</div>

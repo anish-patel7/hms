@@ -90,6 +90,7 @@ export interface AppSettings {
   groupName: string
   adminPasswordHash: string
   userPasswordHash: string
+  entertainmentUrl?: string
 }
 
 export interface AppData {
