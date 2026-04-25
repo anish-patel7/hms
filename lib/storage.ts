@@ -123,9 +123,10 @@ export async function pullSharedData(): Promise<boolean> {
     }
     
     // Cloud has more or equal content — pull it down
-    if (cloudContentCount > 0) {
+    if (cloudContentCount >= 0) {
       const merged: AppData = {
         ...localData,
+        settings: cloudData.settings || localData.settings,
         trips: cloudData.trips || localData.trips || [],
         polls: cloudData.polls || localData.polls || [],
         posts: cloudData.posts || localData.posts || [],
